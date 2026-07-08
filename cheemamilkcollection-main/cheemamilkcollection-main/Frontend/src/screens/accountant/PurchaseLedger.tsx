@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { 
   Calendar, Phone, Clock, Plus, Save, Trash2, 
   UserCheck, DollarSign, BarChart2, CheckCircle, Smartphone, User, MessageCircle, AlertCircle, Search, Edit2, Check, Eye, X, Filter, TrendingUp, RefreshCw, Send, CheckCircle2, ChevronRight, HelpCircle, FileDown
@@ -641,10 +641,33 @@ export default function PurchaseLedger() {
     return getSupplierBalanceBeforeDate(profile, '9999-12-31');
   };
 
+  // ── useMemo: Har supplier ka balance ek baar compute karo ─────────────────
+  // Render pe baar baar heavy loop nahi chalega
+  const supplierBalanceMap = useMemo(() => {
+    const map = new Map<string, number>();
+    for (const p of supplierProfiles) {
+      map.set(p.id, getSupplierCurrentBalance(p));
+    }
+    return map;
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [allPurchaseEntries, supplierProfiles]);
+
+  // ── useMemo: selectedDate ke liye prevBalance map ─────────────────────────
+  const supplierPrevBalanceMap = useMemo(() => {
+    const map = new Map<string, number>();
+    for (const p of supplierProfiles) {
+      map.set(p.id, getSupplierBalanceBeforeDate(p, selectedDate));
+    }
+    return map;
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [allPurchaseEntries, supplierProfiles, selectedDate]);
+
   // SUMMARIZE ALL SYSTEM OUTSTANDING RECEIPTS DYNAMICALLY
-  const totalSystemOutstanding = supplierProfiles.reduce((acc, p) => {
-    return acc + getSupplierCurrentBalance(p);
-  }, 0);
+  const totalSystemOutstanding = useMemo(() => {
+    let total = 0;
+    supplierBalanceMap.forEach(v => { total += v; });
+    return total;
+  }, [supplierBalanceMap]);
 
   // SEARCH & FILTER PROFILES
   const filteredProfiles = supplierProfiles.filter(p => {
@@ -1395,7 +1418,7 @@ export default function PurchaseLedger() {
               {/* Grid of supplier profile cards */}
               <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
                 {filteredProfiles.map(p => {
-                  const balance = getSupplierCurrentBalance(p);
+                  const balance = supplierBalanceMap.get(p.id) ?? getSupplierCurrentBalance(p);
                   return (
                     <div 
                       key={p.id} 
@@ -1552,7 +1575,7 @@ export default function PurchaseLedger() {
                         if (showOnlyEntered && !entry) return null;
 
                         // Previous Outstanding auto-loads prior to the selection date. Read-only.
-                        const prevBal = getSupplierBalanceBeforeDate(p, selectedDate);
+                        const prevBal = supplierPrevBalanceMap.get(p.id) ?? getSupplierBalanceBeforeDate(p, selectedDate);
                         
                         // Calculated remaining: Previous outstanding - Milk + Advance + Cash
                         const calculatedRem = entry 
@@ -1791,7 +1814,8 @@ export default function PurchaseLedger() {
       {/* RECORD SALE ENTRY / MODAL SHEET */}
       {showEntryModal && activeProfileForEntry && (() => {
         // Dynamic automatic loading of PREVIOUS remaining balance (strictly read-only)
-        const prevBal = getSupplierCurrentBalance(activeProfileForEntry);
+        // useMemo cached map se lo — render pe heavy loop nahi chalega
+        const prevBal = supplierBalanceMap.get(activeProfileForEntry.id) ?? getSupplierCurrentBalance(activeProfileForEntry);
         
         const milkValue = Number(entryMilkPKR) || 0;
         const advanceValue = Number(entryAdvance) || 0;

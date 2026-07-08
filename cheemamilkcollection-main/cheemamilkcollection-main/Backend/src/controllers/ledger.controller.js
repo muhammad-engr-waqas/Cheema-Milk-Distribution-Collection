@@ -37,18 +37,10 @@ const getPurchaseLedger = asyncHandler(async (req, res) => {
     (e.discountAmount || 0) > 0
   );
 
-  // Duplicate dedupe — same supplierName+date+totalAmount+milkLiter wali entries mein sirf latest rakho
-  const seen = new Map();
-  for (const e of filtered) {
-    const dupKey = `${e.supplierName}_${e.date}_${e.totalAmount}_${e.milkLiter}`;
-    const existing = seen.get(dupKey);
-    if (!existing || new Date(e.createdAt) > new Date(existing.createdAt)) {
-      seen.set(dupKey, e);
-    }
-  }
-  const deduped = Array.from(seen.values());
+  // NOTE: Dedupe yahan NAHI karni — same party se same rate pe genuinely 2 baar
+  // milk purchase ho sakti hai. Duplicate prevention frontend ki ID se hoti hai.
 
-  return ApiResponse.ok(deduped).send(res);
+  return ApiResponse.ok(filtered).send(res);
 });
 
 /**
@@ -70,14 +62,10 @@ const createPurchaseLedgerEntry = asyncHandler(async (req, res) => {
     req.body.driverId = null;
   }
 
-  // Duplicate check: same supplierName + date + totalAmount + milkLiter
-  if (req.body.supplierName && req.body.date && req.body.totalAmount && req.body.milkLiter > 0) {
-    const existing = await PurchaseLedger.findOne({
-      supplierName: req.body.supplierName,
-      date: req.body.date,
-      totalAmount: req.body.totalAmount,
-      milkLiter: req.body.milkLiter,
-    });
+  // Duplicate check: sirf same MongoDB _id wali entry block karo
+  // Same values wali 2 alag entries ALLOWED hain — genuinely 2 baar purchase ho sakti hai
+  if (req.body.id && /^[a-f\d]{24}$/i.test(String(req.body.id))) {
+    const existing = await PurchaseLedger.findById(req.body.id);
     if (existing) {
       return ApiResponse.ok(existing, 'Entry already exists').send(res);
     }
@@ -219,18 +207,10 @@ const getSaleLedger = asyncHandler(async (req, res) => {
     (e.discountAmount || 0) > 0
   );
 
-  // Duplicate dedupe — same customerName+date+totalAmount+milkLiter wali entries mein sirf latest rakho
-  const seen = new Map();
-  for (const e of filtered) {
-    const dupKey = `${e.customerName}_${e.date}_${e.totalAmount}_${e.milkLiter}`;
-    const existing = seen.get(dupKey);
-    if (!existing || new Date(e.createdAt) > new Date(existing.createdAt)) {
-      seen.set(dupKey, e);
-    }
-  }
-  const deduped = Array.from(seen.values());
+  // NOTE: Dedupe yahan NAHI karni — same customer ko same rate pe genuinely 2 baar
+  // sale ho sakti hai. Duplicate prevention frontend ki ID se hoti hai.
 
-  return ApiResponse.ok(deduped).send(res);
+  return ApiResponse.ok(filtered).send(res);
 });
 
 /**
@@ -250,16 +230,11 @@ const createSaleLedgerEntry = asyncHandler(async (req, res) => {
     req.body.driverId = null;
   }
 
-  // Duplicate check: same customerName + date + totalAmount + milkLiter
-  if (req.body.customerName && req.body.date && req.body.totalAmount && req.body.milkLiter > 0) {
-    const existing = await SaleLedger.findOne({
-      customerName: req.body.customerName,
-      date: req.body.date,
-      totalAmount: req.body.totalAmount,
-      milkLiter: req.body.milkLiter,
-    });
+  // Duplicate check: sirf same MongoDB _id wali entry block karo
+  // Same values wali 2 alag entries ALLOWED hain — genuinely 2 baar sale ho sakti hai
+  if (req.body.id && /^[a-f\d]{24}$/i.test(String(req.body.id))) {
+    const existing = await SaleLedger.findById(req.body.id);
     if (existing) {
-      // Duplicate — wahi return karo, naya mat banao
       return ApiResponse.ok(existing, 'Entry already exists').send(res);
     }
   }

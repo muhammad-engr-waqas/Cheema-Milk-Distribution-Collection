@@ -1,5 +1,4 @@
-import React, { useState, useEffect } from 'react';
-import { useLocation, useNavigate } from 'react-router-dom';
+import React, { useState, useEffect, useMemo } from 'react';
 import { 
   Calendar, Phone, Clock, Plus, Save, Trash2, 
   UserCheck, DollarSign, BarChart2, CheckCircle, Smartphone, User, MessageCircle, AlertCircle, Search, Edit2, Check, Eye, X, Filter, TrendingUp, RefreshCw, Send, CheckCircle2, ChevronRight, HelpCircle, FileDown
@@ -577,10 +576,32 @@ export default function SaleLedger() {
     return getCustomerBalanceBeforeDate(profile, '9999-12-31');
   };
 
+  // ── useMemo: Har customer ka balance ek baar compute karo ─────────────────
+  const customerBalanceMap = useMemo(() => {
+    const map = new Map<string, number>();
+    for (const p of customerProfiles) {
+      map.set(p.id, getCustomerCurrentBalance(p));
+    }
+    return map;
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [allSaleEntries, customerProfiles]);
+
+  // ── useMemo: selectedDate ke liye prevBalance map ─────────────────────────
+  const customerPrevBalanceMap = useMemo(() => {
+    const map = new Map<string, number>();
+    for (const p of customerProfiles) {
+      map.set(p.id, getCustomerBalanceBeforeDate(p, selectedDate));
+    }
+    return map;
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [allSaleEntries, customerProfiles, selectedDate]);
+
   // SUMMARIZE ALL SYSTEM OUTSTANDING RECEIPTS DYNAMICALLY
-  const totalSystemOutstanding = customerProfiles.reduce((acc, p) => {
-    return acc + getCustomerCurrentBalance(p);
-  }, 0);
+  const totalSystemOutstanding = useMemo(() => {
+    let total = 0;
+    customerBalanceMap.forEach(v => { total += v; });
+    return total;
+  }, [customerBalanceMap]);
 
   // SEARCH & FILTER PROFILES
   const filteredProfiles = customerProfiles.filter(p => {
@@ -720,7 +741,7 @@ export default function SaleLedger() {
 
       if (showOnlyEntered && !entry) return null;
 
-      const prevBal = getCustomerBalanceBeforeDate(p, selectedDate);
+      const prevBal = customerPrevBalanceMap.get(p.id) ?? getCustomerBalanceBeforeDate(p, selectedDate);
       const totalAmount = entry ? entry.totalAmount : 0;
       const advanceAmount = entry ? entry.advanceAmount : 0;
       const paymentReceived = entry ? entry.paymentReceived : 0;
@@ -1272,7 +1293,7 @@ export default function SaleLedger() {
               {/* Grid of customer profile cards */}
               <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
                 {filteredProfiles.map(p => {
-                  const balance = getCustomerCurrentBalance(p);
+                  const balance = customerBalanceMap.get(p.id) ?? getCustomerCurrentBalance(p);
                   return (
                     <div 
                       key={p.id} 
@@ -1430,7 +1451,7 @@ export default function SaleLedger() {
                         if (showOnlyEntered && !entry) return null;
 
                         // Previous Outstanding auto-loads prior to the selection date. Read-only.
-                        const prevBal = getCustomerBalanceBeforeDate(p, selectedDate);
+                        const prevBal = customerPrevBalanceMap.get(p.id) ?? getCustomerBalanceBeforeDate(p, selectedDate);
                         
                         // Calculated remaining: Previous outstanding + Milk - Advance - Cash
                         const calculatedRem = entry 
@@ -1671,7 +1692,7 @@ export default function SaleLedger() {
       {/* RECORD SALE ENTRY / MODAL SHEET */}
       {showEntryModal && activeProfileForEntry && (() => {
         // Dynamic automatic loading of PREVIOUS remaining balance (strictly read-only)
-        const prevBal = getCustomerCurrentBalance(activeProfileForEntry);
+        const prevBal = customerBalanceMap.get(activeProfileForEntry.id) ?? getCustomerCurrentBalance(activeProfileForEntry);
         
         const milkValue = Number(entryMilkPKR) || 0;
         const advanceValue = Number(entryAdvance) || 0;
